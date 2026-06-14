@@ -8,6 +8,7 @@ import {
   type SortingState,
   type ColumnFiltersState,
   type PaginationState,
+  type Row,
 } from '@tanstack/react-table';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -16,75 +17,49 @@ import {
   ChevronsLeft,
   ChevronsRight,
 } from 'lucide-react';
-import { useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-import { useEditStore } from '../store/edit-store';
-import type { Employee } from '../types';
+import type { ColumnConfig } from '../types';
 
 import { EditableCell } from './editable-cell';
 import { RowActions } from './row-actions';
 import { TableHeaderCell } from './table-header';
 import { TableToolbar } from './table-toolbar';
 
-const columnHelper = createColumnHelper<Employee>();
-
-const columns = [
-  columnHelper.accessor('name', {
-    header: 'Name',
-    enableSorting: true,
-    enableColumnFilter: true,
-    filterFn: 'includesString',
-  }),
-  columnHelper.accessor('email', {
-    header: 'Email',
-    enableSorting: true,
-    enableColumnFilter: true,
-    filterFn: 'includesString',
-  }),
-  columnHelper.accessor('department', {
-    header: 'Department',
-    enableSorting: true,
-    enableColumnFilter: true,
-    filterFn: 'equalsString',
-  }),
-  columnHelper.accessor('salary', {
-    header: 'Salary',
-    enableSorting: true,
-    enableColumnFilter: true,
-    filterFn: (row, _columnId, filterValue) => {
-      const [min, max] = filterValue as [
-        number | undefined,
-        number | undefined,
-      ];
-      const value = row.getValue<number>('salary');
-      if (min != null && value < min) return false;
-      if (max != null && value > max) return false;
-      return true;
-    },
-  }),
-  columnHelper.accessor('startDate', {
-    header: 'Start Date',
-    enableSorting: true,
-    enableColumnFilter: false,
-  }),
-  columnHelper.display({
-    id: 'actions',
-    header: '',
-    enableSorting: false,
-    enableColumnFilter: false,
-  }),
-];
-
-type Props = {
-  employees: Employee[];
+type Props<T extends { id: string }> = {
+  data: T[];
+  columns: ColumnConfig<T>[];
   isVirtual: boolean;
   onToggleMode: () => void;
+  editingRowId: string | null;
+  draftValues: Partial<T>;
+  updateDraft: (field: keyof T, value: unknown) => void;
+  onStartEditing: (rowId: string, item: T) => void;
+  saveRow: (rowId: string) => void;
+  cancelEdit: (rowId: string) => void;
+  undoRow: (rowId: string) => void;
+  hasUndo: (rowId: string) => boolean;
+  autoSave: () => void;
 };
 
-export function EditableTable({ employees, isVirtual, onToggleMode }: Props) {
+export function EditableTable<T extends { id: string }>({
+  data,
+  columns,
+  isVirtual,
+  onToggleMode,
+  editingRowId,
+  draftValues,
+  updateDraft,
+  onStartEditing,
+  saveRow,
+  cancelEdit,
+  undoRow,
+  hasUndo,
+  autoSave,
+}: Props<T>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -92,21 +67,50 @@ export function EditableTable({ employees, isVirtual, onToggleMode }: Props) {
     pageIndex: 0,
     pageSize: 50,
   });
-  const [clickedField, setClickedField] = useState<keyof Employee | null>(null);
+  const [clickedField, setClickedField] = useState<string | null>(null);
 
-  const editingRowId = useEditStore((s) => s.editingRowId);
-  const startEditing = useEditStore((s) => s.startEditing);
+  const columnHelper = useMemo(() => createColumnHelper<T>(), []);
 
-  const autoSave = useCallback(() => {
-    const state = useEditStore.getState();
-    if (state.editingRowId) {
-      state.saveRow();
-    }
-  }, []);
+  const tanStackColumns = useMemo(
+    () => [
+      ...columns.map((col) =>
+        columnHelper.accessor((row: T) => row[col.accessorKey], {
+          id: col.id,
+          header: col.header,
+          enableSorting: col.enableSorting ?? true,
+          enableColumnFilter: col.enableFilter ?? false,
+          filterFn: col.filterFn
+            ? (row: Row<T>, columnId: string, filterValue: unknown) =>
+                col.filterFn!(row.original, columnId, filterValue)
+            : col.type === 'number'
+              ? (row, _columnId, filterValue) => {
+                  const [min, max] = filterValue as [
+                    number | undefined,
+                    number | undefined,
+                  ];
+                  const val = row.getValue<number>(col.accessorKey);
+                  if (min != null && val < min) return false;
+                  if (max != null && val > max) return false;
+                  return true;
+                }
+              : col.type === 'select'
+                ? 'equalsString'
+                : 'includesString',
+        }),
+      ),
+      columnHelper.display({
+        id: '__actions',
+        header: '',
+        enableSorting: false,
+        enableColumnFilter: false,
+      }),
+    ],
+    [columns, columnHelper],
+  );
 
   const table = useReactTable({
-    data: employees,
-    columns,
+    data,
+    columns: tanStackColumns,
     state: {
       sorting,
       columnFilters,
@@ -159,30 +163,39 @@ export function EditableTable({ employees, isVirtual, onToggleMode }: Props) {
       ? totalSize - virtualRows[virtualRows.length - 1].end
       : 0;
 
-  function handleCellClick(
-    rowId: string,
-    employee: Employee,
-    field?: keyof Employee,
-  ) {
-    if (field) setClickedField(field);
+  const totalColumns = columns.length + 1;
+
+  function handleCellClick(rowId: string, field: string, item: T) {
+    setClickedField(field);
     if (editingRowId) return;
-    startEditing(rowId, employee);
+    onStartEditing(rowId, item);
   }
 
-  function renderRowCells(
-    rowId: string,
-    row: (typeof rows)[number],
-    isEditing: boolean,
-  ) {
+  function renderRowCells(rowId: string, row: Row<T>, isEditing: boolean) {
     return row.getVisibleCells().map((cell) => {
-      if (cell.column.id === 'actions') {
+      if (cell.column.id === '__actions') {
         return (
           <td key={cell.id} className="p-2">
-            <RowActions rowId={rowId} isEditing={isEditing} />
+            <RowActions
+              rowId={rowId}
+              isEditing={isEditing}
+              onSave={() => saveRow(rowId)}
+              onCancel={() => cancelEdit(rowId)}
+              onUndo={undoRow}
+              hasUndo={hasUndo(rowId)}
+            />
           </td>
         );
       }
-      const field = cell.column.id as keyof Employee;
+
+      const col = columns.find((c) => c.id === cell.column.id);
+      if (!col) return null;
+
+      const field = col.accessorKey;
+      const value = isEditing
+        ? draftValues[field] ?? row.original[field]
+        : row.original[field];
+
       return (
         <td
           key={cell.id}
@@ -190,13 +203,15 @@ export function EditableTable({ employees, isVirtual, onToggleMode }: Props) {
             'p-2 cursor-pointer hover:bg-muted/20',
             isEditing && 'p-1',
           )}
-          onClick={() => handleCellClick(rowId, row.original, field)}
+          onClick={() => handleCellClick(rowId, field, row.original)}
         >
           <EditableCell
-            employee={row.original}
-            field={field}
+            value={value}
+            column={col}
+            row={row.original}
             isEditing={isEditing}
-            clickedField={clickedField}
+            shouldFocus={clickedField === field}
+            onChange={updateDraft}
           />
         </td>
       );
@@ -207,6 +222,7 @@ export function EditableTable({ employees, isVirtual, onToggleMode }: Props) {
     <div className="space-y-4">
       <TableToolbar
         table={table}
+        columns={columns}
         isVirtual={isVirtual}
         onToggleMode={onToggleMode}
         filteredCount={rows.length}
@@ -233,7 +249,7 @@ export function EditableTable({ employees, isVirtual, onToggleMode }: Props) {
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={columns.length}
+                  colSpan={totalColumns}
                   className="h-40 text-center text-muted-foreground"
                 >
                   No rows match the current filters.

@@ -2,19 +2,23 @@ import { Check, Undo2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
-import { useEditStore } from '../store/edit-store';
-
 type Props = {
   rowId: string;
   isEditing: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  onUndo: (rowId: string) => void;
+  hasUndo: boolean;
 };
 
-export function RowActions({ rowId, isEditing }: Props) {
-  const saveRow = useEditStore((s) => s.saveRow);
-  const cancelEdit = useEditStore((s) => s.cancelEdit);
-  const undoRow = useEditStore((s) => s.undoRow);
-  const hasUndo = useEditStore((s) => s.hasUndo(rowId));
-
+export function RowActions({
+  rowId,
+  isEditing,
+  onSave,
+  onCancel,
+  onUndo,
+  hasUndo,
+}: Props) {
   if (isEditing) {
     return (
       <div className="flex items-center gap-1">
@@ -22,7 +26,7 @@ export function RowActions({ rowId, isEditing }: Props) {
           variant="ghost"
           size="icon"
           className="size-7 text-green-600 hover:text-green-700"
-          onClick={saveRow}
+          onClick={onSave}
           title="Save"
         >
           <Check className="size-4" />
@@ -31,7 +35,7 @@ export function RowActions({ rowId, isEditing }: Props) {
           variant="ghost"
           size="icon"
           className="size-7 text-red-600 hover:text-red-700"
-          onClick={cancelEdit}
+          onClick={onCancel}
           title="Cancel"
         >
           <X className="size-4" />
@@ -47,7 +51,7 @@ export function RowActions({ rowId, isEditing }: Props) {
         size="icon"
         className="size-7 text-muted-foreground"
         disabled={!hasUndo}
-        onClick={() => undoRow(rowId)}
+        onClick={() => onUndo(rowId)}
         title="Undo last save"
       >
         <Undo2 className="size-4" />

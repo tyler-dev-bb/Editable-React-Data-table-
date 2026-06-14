@@ -1,20 +1,18 @@
 import { create } from 'zustand';
 
-import type { Employee } from '../types';
-
-type DataStore = {
-  employees: Employee[];
-  setEmployees: (employees: Employee[]) => void;
-  updateEmployee: (id: string, data: Partial<Employee>) => void;
+type DataStore<T extends { id: string }> = {
+  data: T[];
+  setData: (data: T[]) => void;
+  updateItem: (id: string, partial: Partial<T>) => void;
 };
 
-export const useDataStore = create<DataStore>((set) => ({
-  employees: [],
-  setEmployees: (employees) => set({ employees }),
-  updateEmployee: (id, data) =>
-    set((state) => ({
-      employees: state.employees.map((emp) =>
-        emp.id === id ? { ...emp, ...data } : emp,
-      ),
-    })),
-}));
+export function createDataStore<T extends { id: string }>() {
+  return create<DataStore<T>>((set) => ({
+    data: [],
+    setData: (data) => set({ data }),
+    updateItem: (id, partial) =>
+      set((state) => ({
+        data: state.data.map((d) => (d.id === id ? { ...d, ...partial } : d)),
+      })),
+  }));
+}

@@ -1,60 +1,71 @@
-import { useEditStore } from '../store/edit-store';
-import { DEPARTMENTS } from '../types';
-import type { Employee } from '../types';
+import type { ColumnConfig } from '../types';
 
-type Props = {
-  employee: Employee;
-  field: keyof Employee;
+type Props<T extends { id: string }> = {
+  value: unknown;
+  column: ColumnConfig<T>;
+  row: T;
   isEditing: boolean;
-  clickedField: keyof Employee | null;
+  shouldFocus: boolean;
+  onChange: (field: keyof T, value: unknown) => void;
 };
 
-export function EditableCell({
-  employee,
-  field,
+export function EditableCell<T extends { id: string }>({
+  value,
+  column,
+  row,
   isEditing,
-  clickedField,
-}: Props) {
-  const draftValues = useEditStore((s) => s.draftValues);
-  const updateDraft = useEditStore((s) => s.updateDraft);
-
-  const shouldFocus = clickedField === field;
-
+  shouldFocus,
+  onChange,
+}: Props<T>) {
   if (!isEditing) {
-    if (field === 'salary') {
-      return <span>${employee.salary.toLocaleString()}</span>;
+    if (column.cell) {
+      return <>{column.cell(value, row)}</>;
     }
-    return <span>{String(employee[field])}</span>;
+    if (column.type === 'number') {
+      return <span>{(value as number)?.toLocaleString()}</span>;
+    }
+    return <span>{String(value ?? '')}</span>;
   }
 
-  const value = draftValues[field] ?? employee[field];
+  const currentValue = value;
 
-  if (field === 'department') {
+  if (column.editCell) {
+    return (
+      <>
+        {column.editCell(currentValue, row, (v) =>
+          onChange(column.accessorKey, v),
+        )}
+      </>
+    );
+  }
+
+  if (column.type === 'select' && column.options) {
     return (
       <select
         className="w-full rounded border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        value={value as string}
-        onChange={(e) => updateDraft(field, e.target.value)}
+        value={String(currentValue ?? '')}
+        onChange={(e) => onChange(column.accessorKey, e.target.value)}
         ref={(el) => {
           if (shouldFocus) el?.focus();
         }}
       >
-        {DEPARTMENTS.map((d) => (
-          <option key={d} value={d}>
-            {d}
+        <option value="">Select...</option>
+        {column.options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt}
           </option>
         ))}
       </select>
     );
   }
 
-  if (field === 'salary') {
+  if (column.type === 'number') {
     return (
       <input
         className="w-full rounded border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         type="number"
-        value={value as number}
-        onChange={(e) => updateDraft(field, Number(e.target.value))}
+        value={Number(currentValue ?? 0)}
+        onChange={(e) => onChange(column.accessorKey, Number(e.target.value))}
         ref={(el) => {
           if (shouldFocus) el?.focus();
         }}
@@ -62,13 +73,13 @@ export function EditableCell({
     );
   }
 
-  if (field === 'name' || field === 'email') {
+  if (column.type === 'date') {
     return (
       <input
         className="w-full rounded border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        type="text"
-        value={value as string}
-        onChange={(e) => updateDraft(field, e.target.value)}
+        type="date"
+        value={String(currentValue ?? '')}
+        onChange={(e) => onChange(column.accessorKey, e.target.value)}
         ref={(el) => {
           if (shouldFocus) el?.focus();
         }}
@@ -76,5 +87,15 @@ export function EditableCell({
     );
   }
 
-  return <span>{String(employee[field])}</span>;
+  return (
+    <input
+      className="w-full rounded border border-input bg-background px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      type="text"
+      value={String(currentValue ?? '')}
+      onChange={(e) => onChange(column.accessorKey, e.target.value)}
+      ref={(el) => {
+        if (shouldFocus) el?.focus();
+      }}
+    />
+  );
 }

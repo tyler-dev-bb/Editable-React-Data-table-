@@ -1,16 +1,21 @@
-import type { Employee } from '../types';
+import type { ColumnConfig } from '../types';
 
-export function exportToCsv(rows: Employee[], filename: string) {
-  const headers = ['Name', 'Email', 'Department', 'Salary', 'Start Date'];
+export function exportToCsv<T extends { id: string }>(
+  rows: T[],
+  columns: ColumnConfig<T>[],
+  filename: string,
+) {
+  const exportable = columns.filter((c) => c.exportable !== false);
+  const headers = exportable.map((c) => c.header);
 
-  const csvRows = rows.map((r) =>
-    [
-      `"${r.name.replace(/"/g, '""')}"`,
-      `"${r.email}"`,
-      `"${r.department}"`,
-      r.salary,
-      r.startDate,
-    ].join(','),
+  const csvRows = rows.map((row) =>
+    exportable
+      .map((col) => {
+        const value = row[col.accessorKey];
+        const str = String(value ?? '');
+        return `"${str.replace(/"/g, '""')}"`;
+      })
+      .join(','),
   );
 
   const csv = [headers.join(','), ...csvRows].join('\n');

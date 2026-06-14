@@ -1,84 +1,88 @@
 import { create } from 'zustand';
+import type { StoreApi, UseBoundStore } from 'zustand';
 
-import type { Employee } from '../types';
-
-import { useDataStore } from './data-store';
-
-type EditStore = {
+type EditStore<T extends { id: string }> = {
   editingRowId: string | null;
-  draftValues: Partial<Employee>;
-  undoSnapshots: Record<string, Employee>;
-
-  startEditing: (id: string, employee: Employee) => void;
-  updateDraft: (field: keyof Employee, value: string | number) => void;
+  draftValues: Partial<T>;
+  undoSnapshots: Record<string, T>;
+  startEditing: (id: string, item: T) => void;
+  updateDraft: (field: keyof T, value: unknown) => void;
   saveRow: () => void;
   cancelEdit: () => void;
   undoRow: (id: string) => void;
   hasUndo: (id: string) => boolean;
 };
 
-export const useEditStore = create<EditStore>((set, get) => ({
-  editingRowId: null,
-  draftValues: {},
-  undoSnapshots: {},
+export function createEditStore<T extends { id: string }>(
+  useDataStore: UseBoundStore<
+    StoreApi<{
+      data: T[];
+      updateItem: (id: string, partial: Partial<T>) => void;
+    }>
+  >,
+) {
+  return create<EditStore<T>>((set, get) => ({
+    editingRowId: null,
+    draftValues: {} as Partial<T>,
+    undoSnapshots: {} as Record<string, T>,
 
-  startEditing: (id, employee) => {
-    const state = get();
-    if (state.editingRowId && state.editingRowId !== id) {
-      const dataStore = useDataStore.getState();
-      const current = dataStore.employees.find(
-        (e) => e.id === state.editingRowId,
-      );
+    startEditing: (id, item) => {
+      const state = get();
+      if (state.editingRowId && state.editingRowId !== id) {
+        const dataState = useDataStore.getState();
+        const current = dataState.data.find((e) => e.id === state.editingRowId);
+        if (current) {
+          dataState.updateItem(state.editingRowId, state.draftValues);
+          set({
+            undoSnapshots: {
+              ...state.undoSnapshots,
+              [state.editingRowId]: { ...current },
+            },
+          });
+        }
+      }
+      set({ editingRowId: id, draftValues: { ...item } as Partial<T> });
+    },
+
+    updateDraft: (field, value) =>
+      set((state) => ({
+        draftValues: { ...state.draftValues, [field]: value },
+      })),
+
+    saveRow: () => {
+      const { editingRowId, draftValues } = get();
+      if (!editingRowId) return;
+
+      const dataState = useDataStore.getState();
+      const current = dataState.data.find((e) => e.id === editingRowId);
+
       if (current) {
-        dataStore.updateEmployee(state.editingRowId, state.draftValues);
-        set({
+        set((state) => ({
           undoSnapshots: {
             ...state.undoSnapshots,
-            [state.editingRowId]: { ...current },
+            [editingRowId]: { ...current },
           },
-        });
+        }));
       }
-    }
-    set({ editingRowId: id, draftValues: { ...employee } });
-  },
 
-  updateDraft: (field, value) =>
-    set((state) => ({
-      draftValues: { ...state.draftValues, [field]: value },
-    })),
+      dataState.updateItem(editingRowId, draftValues);
+      set({ editingRowId: null, draftValues: {} as Partial<T> });
+    },
 
-  saveRow: () => {
-    const { editingRowId, draftValues } = get();
-    if (!editingRowId) return;
+    cancelEdit: () =>
+      set({ editingRowId: null, draftValues: {} as Partial<T> }),
 
-    const dataStore = useDataStore.getState();
-    const current = dataStore.employees.find((e) => e.id === editingRowId);
+    undoRow: (id) => {
+      const state = get();
+      const snapshot = state.undoSnapshots[id];
+      if (!snapshot) return;
 
-    if (current) {
-      set((state) => ({
-        undoSnapshots: {
-          ...state.undoSnapshots,
-          [editingRowId]: { ...current },
-        },
-      }));
-    }
+      useDataStore.getState().updateItem(id, snapshot);
+      const snapshots = { ...state.undoSnapshots };
+      delete snapshots[id];
+      set({ undoSnapshots: snapshots });
+    },
 
-    dataStore.updateEmployee(editingRowId, draftValues);
-    set({ editingRowId: null, draftValues: {} });
-  },
-
-  cancelEdit: () => set({ editingRowId: null, draftValues: {} }),
-
-  undoRow: (id) => {
-    const state = get();
-    const snapshot = state.undoSnapshots[id];
-    if (!snapshot) return;
-
-    useDataStore.getState().updateEmployee(id, snapshot);
-    const snapshots = { ...state.undoSnapshots };
-    delete snapshots[id];
-    set({ undoSnapshots: snapshots });
-  },
-
-  hasUndo: (id) => id in get().undoSnapshots,
-}));
+    hasUndo: (id) => id in get().undoSnapshots,
+  }));
+}

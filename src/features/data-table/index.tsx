@@ -5,15 +5,75 @@ import { Head } from '@/components/seo/head';
 
 import { EditableTable } from './components/editable-table';
 import { generateEmployees } from './data';
-import { useDataStore } from './store/data-store';
-import { useEditStore } from './store/edit-store';
+import { createDataStore } from './store/data-store';
+import { createEditStore } from './store/edit-store';
+import type { ColumnConfig, Employee } from './types';
 
 const ROW_COUNT = 10_000;
 
+const useDataStore = createDataStore<Employee>();
+const useEditStore = createEditStore<Employee>(useDataStore);
+
+const columns: ColumnConfig<Employee>[] = [
+  {
+    id: 'name',
+    header: 'Name',
+    accessorKey: 'name',
+    type: 'text',
+    enableFilter: true,
+  },
+  {
+    id: 'email',
+    header: 'Email',
+    accessorKey: 'email',
+    type: 'text',
+    enableFilter: true,
+  },
+  {
+    id: 'department',
+    header: 'Department',
+    accessorKey: 'department',
+    type: 'select',
+    options: [
+      'Engineering',
+      'Marketing',
+      'Sales',
+      'HR',
+      'Finance',
+      'Operations',
+      'Legal',
+      'Design',
+    ],
+    enableFilter: true,
+  },
+  {
+    id: 'salary',
+    header: 'Salary',
+    accessorKey: 'salary',
+    type: 'number',
+    enableFilter: true,
+    cell: (value) => <span>${(value as number).toLocaleString()}</span>,
+  },
+  {
+    id: 'startDate',
+    header: 'Start Date',
+    accessorKey: 'startDate',
+    type: 'date',
+  },
+];
+
 export function DataTablePage() {
-  const employees = useDataStore((s) => s.employees);
-  const setEmployees = useDataStore((s) => s.setEmployees);
+  const employees = useDataStore((s) => s.data);
+  const setEmployees = useDataStore((s) => s.setData);
   const editingRowId = useEditStore((s) => s.editingRowId);
+  const draftValues = useEditStore((s) => s.draftValues);
+  const updateDraft = useEditStore((s) => s.updateDraft);
+  const startEditing = useEditStore((s) => s.startEditing);
+  const saveRow = useEditStore((s) => s.saveRow);
+  const cancelEdit = useEditStore((s) => s.cancelEdit);
+  const undoRow = useEditStore((s) => s.undoRow);
+  const hasUndo = useEditStore((s) => s.hasUndo);
+
   const [isVirtual, setIsVirtual] = useState(true);
 
   const autoSave = useCallback(() => {
@@ -65,9 +125,19 @@ export function DataTablePage() {
       {employees.length > 0 && (
         <EditableTable
           key={isVirtual ? 'virtual' : 'paginated'}
-          employees={employees}
+          data={employees}
+          columns={columns}
           isVirtual={isVirtual}
           onToggleMode={toggleMode}
+          editingRowId={editingRowId}
+          draftValues={draftValues}
+          updateDraft={updateDraft}
+          onStartEditing={startEditing}
+          saveRow={saveRow}
+          cancelEdit={cancelEdit}
+          undoRow={undoRow}
+          hasUndo={hasUndo}
+          autoSave={autoSave}
         />
       )}
     </div>

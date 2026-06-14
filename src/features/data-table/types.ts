@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 export const DEPARTMENTS = [
   'Engineering',
   'Marketing',
@@ -19,3 +21,21 @@ export interface Employee {
   salary: number;
   startDate: string;
 }
+
+export type ColumnConfig<T extends { id: string }> = {
+  id: string;
+  header: string;
+  accessorKey: keyof T & string;
+  type: 'text' | 'number' | 'select' | 'date';
+  options?: string[];
+  enableSorting?: boolean;
+  enableFilter?: boolean;
+  exportable?: boolean;
+  filterFn?: (row: T, columnId: string, filterValue: unknown) => boolean;
+  cell?: (value: unknown, row: T) => ReactNode;
+  editCell?: (
+    value: unknown,
+    row: T,
+    onChange: (val: unknown) => void,
+  ) => ReactNode;
+};

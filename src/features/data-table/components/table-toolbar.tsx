@@ -5,42 +5,54 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/utils/cn';
 
-import type { Employee } from '../types';
-import { DEPARTMENTS } from '../types';
+import type { ColumnConfig } from '../types';
 import { exportToCsv } from '../utils/csv';
 
-type Props = {
-  table: Table<Employee>;
+type Props<T extends { id: string }> = {
+  table: Table<T>;
+  columns: ColumnConfig<T>[];
   isVirtual: boolean;
   onToggleMode: () => void;
   filteredCount: number;
 };
 
-export function TableToolbar({
+export function TableToolbar<T extends { id: string }>({
   table,
+  columns: columnConfigs,
   isVirtual,
   onToggleMode,
   filteredCount,
-}: Props) {
+}: Props<T>) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const globalFilter = table.getState().globalFilter;
+  const globalFilter = table.getState().globalFilter as string | undefined;
 
-  const nameFilter = table.getColumn('name')?.getFilterValue() as
-    | string
-    | undefined;
-  const emailFilter = table.getColumn('email')?.getFilterValue() as
-    | string
-    | undefined;
-  const deptFilter = table.getColumn('department')?.getFilterValue() as
-    | string
-    | undefined;
-  const salaryMin = (
-    table.getColumn('salary')?.getFilterValue() as [number, number]
-  )?.[0];
-  const salaryMax = (
-    table.getColumn('salary')?.getFilterValue() as [number, number]
-  )?.[1];
+  const filterableColumns = columnConfigs.filter(
+    (c) => c.enableFilter !== false,
+  );
+
+  function getFilterValue(colId: string): unknown {
+    return table.getColumn(colId)?.getFilterValue();
+  }
+
+  function setFilterValue(colId: string, value: unknown) {
+    table.getColumn(colId)?.setFilterValue(value);
+  }
+
+  const hasFilters = !!(
+    globalFilter ||
+    filterableColumns.some((col) => {
+      const val = getFilterValue(col.id);
+      if (col.type === 'number') {
+        const [min, max] = (val as [
+          number | undefined,
+          number | undefined,
+        ]) ?? [undefined, undefined];
+        return min != null || max != null;
+      }
+      return !!val;
+    })
+  );
 
   function clearFilters() {
     table.resetGlobalFilter();
@@ -49,17 +61,8 @@ export function TableToolbar({
 
   function handleExport() {
     const rows = table.getFilteredRowModel().rows.map((r) => r.original);
-    exportToCsv(rows, `employees-${Date.now()}.csv`);
+    exportToCsv(rows, columnConfigs, `export-${Date.now()}.csv`);
   }
-
-  const hasFilters = !!(
-    globalFilter ||
-    nameFilter ||
-    emailFilter ||
-    deptFilter ||
-    salaryMin != null ||
-    salaryMax != null
-  );
 
   return (
     <div className="space-y-3">
@@ -119,109 +122,110 @@ export function TableToolbar({
 
       {filtersOpen && (
         <div className="flex flex-wrap gap-3 rounded-lg border bg-muted/30 p-3">
-          <div className="space-y-1">
-            <label
-              className="text-xs font-medium text-muted-foreground"
-              htmlFor="filter-name"
-            >
-              Name
-            </label>
-            <input
-              id="filter-name"
-              className="h-9 max-w-[180px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Filter by name..."
-              value={nameFilter ?? ''}
-              onChange={(e) =>
-                table.getColumn('name')?.setFilterValue(e.target.value)
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <label
-              className="text-xs font-medium text-muted-foreground"
-              htmlFor="filter-email"
-            >
-              Email
-            </label>
-            <input
-              id="filter-email"
-              className="h-9 max-w-[200px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder="Filter by email..."
-              value={emailFilter ?? ''}
-              onChange={(e) =>
-                table.getColumn('email')?.setFilterValue(e.target.value)
-              }
-            />
-          </div>
-          <div className="space-y-1">
-            <label
-              className="text-xs font-medium text-muted-foreground"
-              htmlFor="filter-dept"
-            >
-              Department
-            </label>
-            <select
-              id="filter-dept"
-              className={cn(
-                'h-9 rounded-md border border-input bg-background px-3 py-1 text-sm',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-              )}
-              value={deptFilter ?? ''}
-              onChange={(e) =>
-                table
-                  .getColumn('department')
-                  ?.setFilterValue(e.target.value || undefined)
-              }
-            >
-              <option value="">All</option>
-              {DEPARTMENTS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <label
-              className="text-xs font-medium text-muted-foreground"
-              htmlFor="filter-salary-min"
-            >
-              Salary range
-            </label>
-            <div className="flex items-center gap-1">
-              <input
-                id="filter-salary-min"
-                className="h-9 max-w-[110px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                type="number"
-                placeholder="Min"
-                value={salaryMin ?? ''}
-                onChange={(e) =>
-                  table
-                    .getColumn('salary')
-                    ?.setFilterValue([
-                      e.target.value ? Number(e.target.value) : undefined,
-                      salaryMax,
-                    ])
-                }
-              />
-              <span className="text-muted-foreground">—</span>
-              <input
-                id="filter-salary-max"
-                className="h-9 max-w-[110px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                type="number"
-                placeholder="Max"
-                value={salaryMax ?? ''}
-                onChange={(e) =>
-                  table
-                    .getColumn('salary')
-                    ?.setFilterValue([
-                      salaryMin,
-                      e.target.value ? Number(e.target.value) : undefined,
-                    ])
-                }
-              />
-            </div>
-          </div>
+          {filterableColumns.map((col) => {
+            if (col.type === 'select' && col.options) {
+              const val = getFilterValue(col.id) as string | undefined;
+              return (
+                <div key={col.id} className="space-y-1">
+                  <label
+                    className="text-xs font-medium text-muted-foreground"
+                    htmlFor={`filter-${col.id}`}
+                  >
+                    {col.header}
+                  </label>
+                  <select
+                    id={`filter-${col.id}`}
+                    className={cn(
+                      'h-9 rounded-md border border-input bg-background px-3 py-1 text-sm',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    )}
+                    value={val ?? ''}
+                    onChange={(e) =>
+                      setFilterValue(col.id, e.target.value || undefined)
+                    }
+                  >
+                    <option value="">All</option>
+                    {col.options.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            }
+
+            if (col.type === 'number') {
+              const [min, max] = (getFilterValue(col.id) as [
+                number | undefined,
+                number | undefined,
+              ]) ?? [undefined, undefined];
+              return (
+                <div key={col.id} className="space-y-1">
+                  <label
+                    className="text-xs font-medium text-muted-foreground"
+                    htmlFor={`filter-${col.id}-min`}
+                  >
+                    {col.header} range
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <input
+                      id={`filter-${col.id}-min`}
+                      className="h-9 max-w-[110px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      type="number"
+                      placeholder="Min"
+                      value={min ?? ''}
+                      onChange={(e) =>
+                        setFilterValue(col.id, [
+                          e.target.value ? Number(e.target.value) : undefined,
+                          max,
+                        ])
+                      }
+                    />
+                    <span className="text-muted-foreground">—</span>
+                    <input
+                      id={`filter-${col.id}-max`}
+                      className="h-9 max-w-[110px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      type="number"
+                      placeholder="Max"
+                      value={max ?? ''}
+                      onChange={(e) =>
+                        setFilterValue(col.id, [
+                          min,
+                          e.target.value ? Number(e.target.value) : undefined,
+                        ])
+                      }
+                    />
+                  </div>
+                </div>
+              );
+            }
+
+            if (col.type === 'text' || col.type === 'date') {
+              const val = getFilterValue(col.id) as string | undefined;
+              return (
+                <div key={col.id} className="space-y-1">
+                  <label
+                    className="text-xs font-medium text-muted-foreground"
+                    htmlFor={`filter-${col.id}`}
+                  >
+                    {col.header}
+                  </label>
+                  <input
+                    id={`filter-${col.id}`}
+                    className="h-9 max-w-[200px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder={`Filter by ${col.header.toLowerCase()}...`}
+                    value={val ?? ''}
+                    onChange={(e) =>
+                      setFilterValue(col.id, e.target.value || undefined)
+                    }
+                  />
+                </div>
+              );
+            }
+
+            return null;
+          })}
         </div>
       )}
 
