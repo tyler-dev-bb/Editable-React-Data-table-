@@ -66,11 +66,11 @@ export function TableToolbar<T extends { id: string }>({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
         <div className="relative min-w-[200px] flex-1">
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            className="w-full rounded-md border border-input bg-background py-2 pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-9 w-full rounded-md border border-input bg-background pl-8 pr-3 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder="Search all columns..."
             value={globalFilter ?? ''}
             onChange={(e) => table.setGlobalFilter(e.target.value)}
@@ -96,136 +96,170 @@ export function TableToolbar<T extends { id: string }>({
         >
           {isVirtual ? (
             <>
-              <List className="mr-1.5 size-4" />
+              <List className="size-4" />
               Paginated
             </>
           ) : (
             <>
-              <Table2 className="mr-1.5 size-4" />
+              <Table2 className="size-4" />
               Virtual
             </>
           )}
         </Button>
 
         <Button variant="outline" size="sm" onClick={handleExport}>
-          <Download className="mr-1.5 size-4" />
+          <Download className="size-4" />
           Export CSV
         </Button>
 
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <FilterX className="mr-1.5 size-4" />
+            <FilterX className="size-4" />
             Clear
           </Button>
         )}
       </div>
 
       {filtersOpen && (
-        <div className="flex flex-wrap gap-3 rounded-lg border bg-muted/30 p-3">
-          {filterableColumns.map((col) => {
-            if (col.type === 'select' && col.options) {
-              const val = getFilterValue(col.id) as string | undefined;
-              return (
-                <div key={col.id} className="space-y-1">
-                  <label
-                    className="text-xs font-medium text-muted-foreground"
-                    htmlFor={`filter-${col.id}`}
-                  >
-                    {col.header}
-                  </label>
-                  <select
-                    id={`filter-${col.id}`}
-                    className={cn(
-                      'h-9 rounded-md border border-input bg-background px-3 py-1 text-sm',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    )}
-                    value={val ?? ''}
-                    onChange={(e) =>
-                      setFilterValue(col.id, e.target.value || undefined)
-                    }
-                  >
-                    <option value="">All</option>
-                    {col.options.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              );
-            }
+        <div className="animate-in slide-in-from-top-2 fade-in-0 duration-200 rounded-xl border bg-muted/30 shadow-sm">
+          {/* Filter header */}
+          <div className="flex items-center justify-between border-b px-4 py-2.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Advanced Filters
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                onClick={() => setFiltersOpen(false)}
+                aria-label="Close filters"
+              >
+                <FilterX className="size-3.5" />
+              </button>
+            </div>
+          </div>
 
-            if (col.type === 'number') {
-              const [min, max] = (getFilterValue(col.id) as [
-                number | undefined,
-                number | undefined,
-              ]) ?? [undefined, undefined];
-              return (
-                <div key={col.id} className="space-y-1">
-                  <label
-                    className="text-xs font-medium text-muted-foreground"
-                    htmlFor={`filter-${col.id}-min`}
+          {/* Filter grid */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 p-4">
+            {filterableColumns.map((col) => {
+              if (col.type === 'select' && col.options) {
+                const val = getFilterValue(col.id) as string | undefined;
+                return (
+                  <div
+                    key={col.id}
+                    className="space-y-2 rounded-lg border bg-background p-3"
                   >
-                    {col.header} range
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <input
-                      id={`filter-${col.id}-min`}
-                      className="h-9 max-w-[110px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      type="number"
-                      placeholder="Min"
-                      value={min ?? ''}
+                    <label
+                      className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      htmlFor={`filter-${col.id}`}
+                    >
+                      {col.header}
+                    </label>
+                    <select
+                      id={`filter-${col.id}`}
+                      className={cn(
+                        'h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      )}
+                      value={val ?? ''}
                       onChange={(e) =>
-                        setFilterValue(col.id, [
-                          e.target.value ? Number(e.target.value) : undefined,
-                          max,
-                        ])
+                        setFilterValue(col.id, e.target.value || undefined)
                       }
-                    />
-                    <span className="text-muted-foreground">—</span>
+                    >
+                      <option value="">All</option>
+                      {col.options.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              }
+
+              if (col.type === 'number') {
+                const [min, max] = (getFilterValue(col.id) as [
+                  number | undefined,
+                  number | undefined,
+                ]) ?? [undefined, undefined];
+                return (
+                  <div
+                    key={col.id}
+                    className="space-y-2 rounded-lg border bg-background p-3"
+                  >
+                    <label
+                      className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      htmlFor={`filter-${col.id}-min`}
+                    >
+                      {col.header} range
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id={`filter-${col.id}-min`}
+                        className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        type="number"
+                        placeholder="Min"
+                        value={min ?? ''}
+                        onChange={(e) =>
+                          setFilterValue(col.id, [
+                            e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                            max,
+                          ])
+                        }
+                      />
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        to
+                      </span>
+                      <input
+                        id={`filter-${col.id}-max`}
+                        className="h-9 w-full min-w-0 rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        type="number"
+                        placeholder="Max"
+                        value={max ?? ''}
+                        onChange={(e) =>
+                          setFilterValue(col.id, [
+                            min,
+                            e.target.value
+                              ? Number(e.target.value)
+                              : undefined,
+                          ])
+                        }
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              if (col.type === 'text' || col.type === 'date') {
+                const val = getFilterValue(col.id) as string | undefined;
+                return (
+                  <div
+                    key={col.id}
+                    className="space-y-2 rounded-lg border bg-background p-3"
+                  >
+                    <label
+                      className="block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+                      htmlFor={`filter-${col.id}`}
+                    >
+                      {col.header}
+                    </label>
                     <input
-                      id={`filter-${col.id}-max`}
-                      className="h-9 max-w-[110px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      type="number"
-                      placeholder="Max"
-                      value={max ?? ''}
+                      id={`filter-${col.id}`}
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      placeholder={`Filter by ${col.header.toLowerCase()}...`}
+                      value={val ?? ''}
                       onChange={(e) =>
-                        setFilterValue(col.id, [
-                          min,
-                          e.target.value ? Number(e.target.value) : undefined,
-                        ])
+                        setFilterValue(col.id, e.target.value || undefined)
                       }
                     />
                   </div>
-                </div>
-              );
-            }
+                );
+              }
 
-            if (col.type === 'text' || col.type === 'date') {
-              const val = getFilterValue(col.id) as string | undefined;
-              return (
-                <div key={col.id} className="space-y-1">
-                  <label
-                    className="text-xs font-medium text-muted-foreground"
-                    htmlFor={`filter-${col.id}`}
-                  >
-                    {col.header}
-                  </label>
-                  <input
-                    id={`filter-${col.id}`}
-                    className="h-9 max-w-[200px] rounded-md border border-input bg-background px-3 py-1 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    placeholder={`Filter by ${col.header.toLowerCase()}...`}
-                    value={val ?? ''}
-                    onChange={(e) =>
-                      setFilterValue(col.id, e.target.value || undefined)
-                    }
-                  />
-                </div>
-              );
-            }
-
-            return null;
-          })}
+              return null;
+            })}
+          </div>
         </div>
       )}
 
